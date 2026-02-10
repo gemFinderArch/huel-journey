@@ -12,11 +12,11 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
-.toolbar input[type=file]{display:none}
 .day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px}
 .day-card.sunday{border-color:#da3633;border-width:2px}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .day-label{font-weight:700;font-size:1rem}
+.day-label .id{color:#58a6ff;margin-right:6px}
 .day-label .dow{color:#8b949e;font-weight:400;font-size:.85rem}
 .day-label .sun-tag{color:#da3633;font-size:.75rem;font-weight:600;background:#da363320;padding:2px 6px;border-radius:4px;margin-left:6px}
 .weight-box{display:flex;align-items:center;gap:6px}
@@ -30,24 +30,21 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .chk.neg label{color:#f0883e}
 .chk.pos label{color:#3fb950}
 .chk.fast label{color:#da3633;font-weight:600}
-.summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center}
-.summary span{margin:0 12px;font-size:.9rem}
+.summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 20px}
+.summary .stat{font-size:.9rem;text-align:center}
 .summary strong{color:#58a6ff}
 .kg{color:#8b949e;font-size:.75rem}
 </style>
 </head>
 <body>
 <h1>Huel Journey</h1>
-<p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 3, 2026</p>
+<p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 3, 2026 &middot; 22 days</p>
 
 <div class="summary" id="summary"></div>
 
 <div class="toolbar">
 <button onclick="exportWeightsCSV()">Download Weights CSV</button>
-<button onclick="exportAllCSV()">Download Full CSV</button>
-<button onclick="exportJSON()">Export All Data (JSON)</button>
-<button onclick="document.getElementById('imp').click()">Import Data (JSON)</button>
-<input type="file" id="imp" accept=".json" onchange="importJSON(event)">
+<button onclick="exportAllCSV()">Download All Data CSV</button>
 </div>
 
 <div id="days"></div>
@@ -61,13 +58,14 @@ for(let d=new Date(START);d<=END;d.setDate(d.getDate()+1)){
 }
 
 const NEG=['NO CIGARETTE','NO ALCOHOL','NO EXTRA FOOD OR DRINK','NO PHONE','NO FAP'];
-const POS_REGULAR=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Drink'];
+const POS_BASE=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Drink'];
 const DB_NAME='huel-journey';
 const LS_KEY='huel-journey-data';
 
 let data={};
 
 function isSunday(d){return d.getDay()===0}
+function isSaturday(d){return d.getDay()===6}
 function fmtDate(d){return d.toISOString().slice(0,10)}
 function fmtDisplay(d){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -77,10 +75,14 @@ function fmtDisplay(d){
 
 function getChecks(d){
   const sun=isSunday(d);
+  const sat=isSaturday(d);
   const list=[];
   if(sun) list.push({id:'FASTING',type:'fast'});
   NEG.forEach(n=>list.push({id:n,type:'neg'}));
-  if(!sun) POS_REGULAR.forEach(p=>list.push({id:p,type:'pos'}));
+  if(!sun){
+    POS_BASE.forEach(p=>list.push({id:p,type:'pos'}));
+    if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});
+  }
   return list;
 }
 
@@ -134,7 +136,7 @@ async function init(){
 function render(){
   const container=document.getElementById('days');
   container.innerHTML='';
-  DAYS.forEach(d=>{
+  DAYS.forEach((d,i)=>{
     const key=fmtDate(d);
     if(!data[key]) data[key]={weight:'',checks:{}};
     const sun=isSunday(d);
@@ -143,14 +145,14 @@ function render(){
 
     const checks=getChecks(d);
     const checksHTML=checks.map(c=>{
-      const cid=key+'_'+c.id;
+      const cid=key+'_'+c.id.replace(/\s+/g,'_');
       const checked=data[key].checks[c.id]?'checked':'';
-      return `<div class="chk ${c.type}"><input type="checkbox" id="${cid}" ${checked} onchange="toggle('${key}','${c.id}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
+      return `<div class="chk ${c.type}"><input type="checkbox" id="${cid}" ${checked} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
     }).join('');
 
     card.innerHTML=`
       <div class="day-header">
-        <div class="day-label">${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}</div>
+        <div class="day-label"><span class="id">#${i+1}</span>${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}</div>
         <div class="weight-box">
           <label>Weight</label>
           <input type="number" step="0.1" min="30" max="300" value="${data[key].weight}" placeholder="kg" onchange="setWeight('${key}',this.value)" onfocus="this.select()">
@@ -175,16 +177,23 @@ function toggle(key,check,val){
 }
 
 function updateSummary(){
-  const weights=DAYS.map(d=>parseFloat(data[fmtDate(d)]?.weight)).filter(w=>!isNaN(w));
+  const entries=DAYS.map(d=>({date:fmtDate(d),w:parseFloat(data[fmtDate(d)]?.weight)})).filter(e=>!isNaN(e.w));
   const el=document.getElementById('summary');
-  if(weights.length===0){el.innerHTML='<span>Enter your first weight to see stats</span>';return;}
-  const first=weights[0],last=weights[weights.length-1];
-  const diff=(last-first).toFixed(1);
+  if(entries.length===0){el.innerHTML='<div class="stat">Enter your first weight to see stats</div>';return;}
+  const first=entries[0].w;
+  const last=entries[entries.length-1].w;
+  const diff=last-first;
   const sign=diff>0?'+':'';
-  el.innerHTML=`<span>Start: <strong>${first} kg</strong></span>`+
-    `<span>Current: <strong>${last} kg</strong></span>`+
-    `<span>Change: <strong>${sign}${diff} kg</strong></span>`+
-    `<span>Entries: <strong>${weights.length}/${DAYS.length}</strong></span>`;
+  const daySpan=Math.max(1,Math.round((new Date(entries[entries.length-1].date)-new Date(entries[0].date))/(86400000)));
+  const avgPerDay=(diff/daySpan).toFixed(2);
+  const avgSign=avgPerDay>0?'+':'';
+  el.innerHTML=
+    `<div class="stat">Start: <strong>${first} kg</strong></div>`+
+    `<div class="stat">Current: <strong>${last} kg</strong></div>`+
+    `<div class="stat">Change: <strong>${sign}${diff.toFixed(1)} kg</strong></div>`+
+    `<div class="stat">Avg/day: <strong>${avgSign}${avgPerDay} kg</strong></div>`+
+    `<div class="stat">Entries: <strong>${entries.length}</strong></div>`+
+    `<div class="stat">Days tracked: <strong>${daySpan}</strong></div>`;
 }
 
 function exportWeightsCSV(){
@@ -199,41 +208,18 @@ function exportWeightsCSV(){
 
 function exportAllCSV(){
   const allChecks=[...new Set(DAYS.flatMap(d=>getChecks(d).map(c=>c.id)))];
-  let csv='Date,Day,Weight (kg),'+allChecks.join(',')+'\n';
-  DAYS.forEach(d=>{
+  let csv='#,Date,Day,Weight (kg),'+allChecks.join(',')+'\n';
+  DAYS.forEach((d,i)=>{
     const key=fmtDate(d);
     const row=data[key]||{weight:'',checks:{}};
+    const dayChecks=getChecks(d).map(x=>x.id);
     const vals=allChecks.map(c=>{
-      const checks=getChecks(d).map(x=>x.id);
-      if(!checks.includes(c)) return 'N/A';
+      if(!dayChecks.includes(c)) return 'N/A';
       return row.checks[c]?'YES':'NO';
     });
-    csv+=`${key},${fmtDisplay(d)},${row.weight||''},${vals.join(',')}\n`;
+    csv+=`${i+1},${key},${fmtDisplay(d)},${row.weight||''},${vals.join(',')}\n`;
   });
   dl(csv,'huel-journey-full.csv','text/csv');
-}
-
-function exportJSON(){
-  dl(JSON.stringify(data,null,2),'huel-journey-backup.json','application/json');
-}
-
-function importJSON(e){
-  const file=e.target.files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    try{
-      const imported=JSON.parse(ev.target.result);
-      if(typeof imported==='object'){
-        data=imported;
-        save();
-        render();
-        alert('Data imported successfully!');
-      }
-    }catch(err){alert('Invalid JSON file');}
-  };
-  reader.readAsText(file);
-  e.target.value='';
 }
 
 function dl(content,name,type){
