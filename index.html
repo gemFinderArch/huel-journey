@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Huel Journey - Feb 10 to Mar 9</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#11088;</text></svg>">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:12px;max-width:900px;margin:0 auto}
@@ -23,7 +24,9 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .weight-box label{color:#8b949e;font-size:.85rem}
 .weight-box input{width:80px;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:5px;font-size:.95rem;text-align:center}
 .weight-box input:focus{outline:none;border-color:#58a6ff}
-.checks{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px}
+.checks{margin-top:8px}
+.check-row{display:flex;flex-wrap:wrap;gap:6px 10px}
+.check-row+.check-row{margin-top:6px}
 .chk{display:flex;align-items:center;gap:5px;font-size:.8rem;padding:3px 0}
 .chk input{width:16px;height:16px;accent-color:#238636;cursor:pointer}
 .chk label{cursor:pointer;white-space:nowrap}
@@ -144,11 +147,13 @@ function render(){
     card.className='day-card'+(sun?' sunday':'');
 
     const checks=getChecks(d);
-    const checksHTML=checks.map(c=>{
+    const mkChk=c=>{
       const cid=key+'_'+c.id.replace(/\s+/g,'_');
       const checked=data[key].checks[c.id]?'checked':'';
       return `<div class="chk ${c.type}"><input type="checkbox" id="${cid}" ${checked} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
-    }).join('');
+    };
+    const topRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
+    const botRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
 
     card.innerHTML=`
       <div class="day-header">
@@ -159,7 +164,10 @@ function render(){
           <span class="kg">kg</span>
         </div>
       </div>
-      <div class="checks">${checksHTML}</div>`;
+      <div class="checks">
+        <div class="check-row">${topRow}</div>
+        ${botRow?`<div class="check-row">${botRow}</div>`:''}
+      </div>`;
     container.appendChild(card);
   });
   updateSummary();
