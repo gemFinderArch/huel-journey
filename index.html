@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huel Journey - Feb 10 to Mar 3</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:12px;max-width:900px;margin:0 auto}
+h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
+.sub{text-align:center;color:#8b949e;font-size:.85rem;margin-bottom:16px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
+.toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
+.toolbar button:hover{background:#30363d}
+.toolbar input[type=file]{display:none}
+.day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px}
+.day-card.sunday{border-color:#da3633;border-width:2px}
+.day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.day-label{font-weight:700;font-size:1rem}
+.day-label .dow{color:#8b949e;font-weight:400;font-size:.85rem}
+.day-label .sun-tag{color:#da3633;font-size:.75rem;font-weight:600;background:#da363320;padding:2px 6px;border-radius:4px;margin-left:6px}
+.weight-box{display:flex;align-items:center;gap:6px}
+.weight-box label{color:#8b949e;font-size:.85rem}
+.weight-box input{width:80px;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:5px;font-size:.95rem;text-align:center}
+.weight-box input:focus{outline:none;border-color:#58a6ff}
+.checks{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:8px}
+.chk{display:flex;align-items:center;gap:5px;font-size:.8rem;padding:3px 0}
+.chk input{width:16px;height:16px;accent-color:#238636;cursor:pointer}
+.chk label{cursor:pointer;white-space:nowrap}
+.chk.neg label{color:#f0883e}
+.chk.pos label{color:#3fb950}
+.chk.fast label{color:#da3633;font-weight:600}
+.summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px;text-align:center}
+.summary span{margin:0 12px;font-size:.9rem}
+.summary strong{color:#58a6ff}
+.kg{color:#8b949e;font-size:.75rem}
+</style>
+</head>
+<body>
+<h1>Huel Journey</h1>
+<p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 3, 2026</p>
+
+<div class="summary" id="summary"></div>
+
+<div class="toolbar">
+<button onclick="exportWeightsCSV()">Download Weights CSV</button>
+<button onclick="exportAllCSV()">Download Full CSV</button>
+<button onclick="exportJSON()">Export All Data (JSON)</button>
+<button onclick="document.getElementById('imp').click()">Import Data (JSON)</button>
+<input type="file" id="imp" accept=".json" onchange="importJSON(event)">
+</div>
+
+<div id="days"></div>
+
+<script>
+const START=new Date(2026,1,10);
+const END=new Date(2026,2,3);
+const DAYS=[];
+for(let d=new Date(START);d<=END;d.setDate(d.getDate()+1)){
+  DAYS.push(new Date(d));
+}
+
+const NEG=['NO CIGARETTE','NO ALCOHOL','NO EXTRA FOOD OR DRINK','NO PHONE','NO FAP'];
+const POS_REGULAR=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Drink'];
+const DB_NAME='huel-journey';
+const LS_KEY='huel-journey-data';
+
+let data={};
+
+function isSunday(d){return d.getDay()===0}
+function fmtDate(d){return d.toISOString().slice(0,10)}
+function fmtDisplay(d){
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months=['Jan','Feb','Mar'];
+  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function getChecks(d){
+  const sun=isSunday(d);
+  const list=[];
+  if(sun) list.push({id:'FASTING',type:'fast'});
+  NEG.forEach(n=>list.push({id:n,type:'neg'}));
+  if(!sun) POS_REGULAR.forEach(p=>list.push({id:p,type:'pos'}));
+  return list;
+}
+
+function save(){
+  localStorage.setItem(LS_KEY,JSON.stringify(data));
+  saveIDB();
+}
+
+function saveIDB(){
+  try{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
+    req.onsuccess=e=>{
+      const db=e.target.result;
+      const tx=db.transaction('data','readwrite');
+      tx.objectStore('data').put(JSON.stringify(data),'main');
+    };
+  }catch(e){}
+}
+
+function loadIDB(){
+  return new Promise(res=>{
+    try{
+      const req=indexedDB.open(DB_NAME,1);
+      req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
+      req.onsuccess=e=>{
+        const db=e.target.result;
+        const tx=db.transaction('data','readonly');
+        const g=tx.objectStore('data').get('main');
+        g.onsuccess=()=>res(g.result?JSON.parse(g.result):null);
+        g.onerror=()=>res(null);
+      };
+      req.onerror=()=>res(null);
+    }catch(e){res(null)}
+  });
+}
+
+async function init(){
+  const ls=localStorage.getItem(LS_KEY);
+  const idb=await loadIDB();
+  if(ls) data=JSON.parse(ls);
+  if(idb){
+    const idbKeys=Object.keys(idb);
+    const lsKeys=Object.keys(data);
+    if(idbKeys.length>lsKeys.length) data=idb;
+  }
+  if(!data||typeof data!=='object') data={};
+  render();
+}
+
+function render(){
+  const container=document.getElementById('days');
+  container.innerHTML='';
+  DAYS.forEach(d=>{
+    const key=fmtDate(d);
+    if(!data[key]) data[key]={weight:'',checks:{}};
+    const sun=isSunday(d);
+    const card=document.createElement('div');
+    card.className='day-card'+(sun?' sunday':'');
+
+    const checks=getChecks(d);
+    const checksHTML=checks.map(c=>{
+      const cid=key+'_'+c.id;
+      const checked=data[key].checks[c.id]?'checked':'';
+      return `<div class="chk ${c.type}"><input type="checkbox" id="${cid}" ${checked} onchange="toggle('${key}','${c.id}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
+    }).join('');
+
+    card.innerHTML=`
+      <div class="day-header">
+        <div class="day-label">${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}</div>
+        <div class="weight-box">
+          <label>Weight</label>
+          <input type="number" step="0.1" min="30" max="300" value="${data[key].weight}" placeholder="kg" onchange="setWeight('${key}',this.value)" onfocus="this.select()">
+          <span class="kg">kg</span>
+        </div>
+      </div>
+      <div class="checks">${checksHTML}</div>`;
+    container.appendChild(card);
+  });
+  updateSummary();
+}
+
+function setWeight(key,val){
+  data[key].weight=val;
+  save();
+  updateSummary();
+}
+
+function toggle(key,check,val){
+  data[key].checks[check]=val;
+  save();
+}
+
+function updateSummary(){
+  const weights=DAYS.map(d=>parseFloat(data[fmtDate(d)]?.weight)).filter(w=>!isNaN(w));
+  const el=document.getElementById('summary');
+  if(weights.length===0){el.innerHTML='<span>Enter your first weight to see stats</span>';return;}
+  const first=weights[0],last=weights[weights.length-1];
+  const diff=(last-first).toFixed(1);
+  const sign=diff>0?'+':'';
+  el.innerHTML=`<span>Start: <strong>${first} kg</strong></span>`+
+    `<span>Current: <strong>${last} kg</strong></span>`+
+    `<span>Change: <strong>${sign}${diff} kg</strong></span>`+
+    `<span>Entries: <strong>${weights.length}/${DAYS.length}</strong></span>`;
+}
+
+function exportWeightsCSV(){
+  let csv='Date,Day,Weight (kg)\n';
+  DAYS.forEach(d=>{
+    const key=fmtDate(d);
+    const w=data[key]?.weight||'';
+    csv+=`${key},${fmtDisplay(d)},${w}\n`;
+  });
+  dl(csv,'huel-weights.csv','text/csv');
+}
+
+function exportAllCSV(){
+  const allChecks=[...new Set(DAYS.flatMap(d=>getChecks(d).map(c=>c.id)))];
+  let csv='Date,Day,Weight (kg),'+allChecks.join(',')+'\n';
+  DAYS.forEach(d=>{
+    const key=fmtDate(d);
+    const row=data[key]||{weight:'',checks:{}};
+    const vals=allChecks.map(c=>{
+      const checks=getChecks(d).map(x=>x.id);
+      if(!checks.includes(c)) return 'N/A';
+      return row.checks[c]?'YES':'NO';
+    });
+    csv+=`${key},${fmtDisplay(d)},${row.weight||''},${vals.join(',')}\n`;
+  });
+  dl(csv,'huel-journey-full.csv','text/csv');
+}
+
+function exportJSON(){
+  dl(JSON.stringify(data,null,2),'huel-journey-backup.json','application/json');
+}
+
+function importJSON(e){
+  const file=e.target.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const imported=JSON.parse(ev.target.result);
+      if(typeof imported==='object'){
+        data=imported;
+        save();
+        render();
+        alert('Data imported successfully!');
+      }
+    }catch(err){alert('Invalid JSON file');}
+  };
+  reader.readAsText(file);
+  e.target.value='';
+}
+
+function dl(content,name,type){
+  const blob=new Blob([content],{type});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+init();
+</script>
+</body>
+</html>
