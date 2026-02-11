@@ -13,13 +13,16 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
-.day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px}
+.day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px;opacity:.55;transition:opacity .3s}
+.day-card.today{opacity:1;border-color:#58a6ff;border-width:2px;box-shadow:0 0 12px #58a6ff30}
 .day-card.sunday{border-color:#da3633;border-width:2px}
+.day-card.sunday.today{border-color:#58a6ff;box-shadow:0 0 12px #58a6ff30}
 .day-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .day-label{font-weight:700;font-size:1rem}
 .day-label .id{color:#58a6ff;margin-right:6px}
 .day-label .dow{color:#8b949e;font-weight:400;font-size:.85rem}
 .day-label .sun-tag{color:#da3633;font-size:.75rem;font-weight:600;background:#da363320;padding:2px 6px;border-radius:4px;margin-left:6px}
+.day-label .today-tag{color:#58a6ff;font-size:.75rem;font-weight:600;background:#58a6ff20;padding:2px 6px;border-radius:4px;margin-left:6px}
 .weight-box{display:flex;align-items:center;gap:6px}
 .weight-box label{color:#8b949e;font-size:.85rem}
 .weight-box input{width:80px;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:5px 8px;border-radius:5px;font-size:.95rem;text-align:center}
@@ -27,15 +30,20 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .checks{margin-top:8px}
 .check-row{display:flex;flex-wrap:wrap;gap:6px 10px}
 .check-row+.check-row{margin-top:6px}
-.chk{display:flex;align-items:center;gap:5px;font-size:.8rem;padding:3px 0}
+.chk{display:flex;align-items:center;gap:5px;font-size:.8rem;padding:3px 0;transition:opacity .2s}
 .chk input{width:16px;height:16px;accent-color:#238636;cursor:pointer}
 .chk label{cursor:pointer;white-space:nowrap}
 .chk.neg label{color:#f0883e}
 .chk.pos label{color:#3fb950}
 .chk.fast label{color:#da3633;font-weight:600}
-.summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 20px}
+.chk.done{opacity:.35}
+.chk.done label{text-decoration:line-through}
+.summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px}
+.summary-row{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 20px}
+.summary-row+.summary-row{margin-top:6px;padding-top:6px;border-top:1px solid #21262d}
 .summary .stat{font-size:.9rem;text-align:center}
 .summary strong{color:#58a6ff}
+.summary .cal{color:#d2a8ff}
 .kg{color:#8b949e;font-size:.75rem}
 </style>
 </head>
@@ -62,6 +70,7 @@ for(let d=new Date(START);d<=END;d.setDate(d.getDate()+1)){
 
 const NEG=['NO CIGARETTE','NO ALCOHOL','NO EXTRA FOOD OR DRINK','NO PHONE','NO WASTE'];
 const POS_BASE=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Meal 4','Huel Drink'];
+const CAL_MAP={'Huel Meal 1':400,'Huel Meal 2':400,'Huel Meal 3':400,'Huel Meal 4':400,'Huel Drink':400,'Daily Greens':25,'1 Whole Fruit':100};
 const DB_NAME='huel-journey';
 const LS_KEY='huel-journey-data';
 
@@ -70,6 +79,7 @@ let data={};
 function isSunday(d){return d.getDay()===0}
 function isSaturday(d){return d.getDay()===6}
 function fmtDate(d){return d.toISOString().slice(0,10)}
+function todayKey(){const t=new Date();return fmtDate(t)}
 function fmtDisplay(d){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const months=['Jan','Feb','Mar'];
@@ -87,6 +97,16 @@ function getChecks(d){
     if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});
   }
   return list;
+}
+
+function dayCal(key,d){
+  const row=data[key];
+  if(!row) return 0;
+  let cal=0;
+  for(const [id,v] of Object.entries(row.checks||{})){
+    if(v && CAL_MAP[id]) cal+=CAL_MAP[id];
+  }
+  return cal;
 }
 
 function save(){
@@ -134,30 +154,42 @@ async function init(){
   }
   if(!data||typeof data!=='object') data={};
   render();
+  setTimeout(()=>{
+    const el=document.querySelector('.day-card.today');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+  },100);
 }
 
 function render(){
   const container=document.getElementById('days');
+  const tk=todayKey();
   container.innerHTML='';
   DAYS.forEach((d,i)=>{
     const key=fmtDate(d);
     if(!data[key]) data[key]={weight:'',checks:{}};
     const sun=isSunday(d);
+    const isToday=key===tk;
     const card=document.createElement('div');
-    card.className='day-card'+(sun?' sunday':'');
+    let cls='day-card';
+    if(sun) cls+=' sunday';
+    if(isToday) cls+=' today';
+    card.className=cls;
+    card.id='day-'+key;
 
     const checks=getChecks(d);
     const mkChk=c=>{
       const cid=key+'_'+c.id.replace(/\s+/g,'_');
-      const checked=data[key].checks[c.id]?'checked':'';
-      return `<div class="chk ${c.type}"><input type="checkbox" id="${cid}" ${checked} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
+      const checked=data[key].checks[c.id];
+      const chkAttr=checked?'checked':'';
+      const doneClass=checked?' done':'';
+      return `<div class="chk ${c.type}${doneClass}" id="w_${cid}"><input type="checkbox" id="${cid}" ${chkAttr} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
     };
     const topRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
     const botRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
 
     card.innerHTML=`
       <div class="day-header">
-        <div class="day-label"><span class="id">#${i+1}</span>${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}</div>
+        <div class="day-label"><span class="id">#${i+1}</span>${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}${isToday?'<span class="today-tag">TODAY</span>':''}</div>
         <div class="weight-box">
           <label>Weight</label>
           <input type="number" step="0.1" min="30" max="300" value="${data[key].weight}" placeholder="kg" onchange="setWeight('${key}',this.value)" onfocus="this.select()">
@@ -182,26 +214,67 @@ function setWeight(key,val){
 function toggle(key,check,val){
   data[key].checks[check]=val;
   save();
+  const el=document.getElementById('w_'+key+'_'+check.replace(/\s+/g,'_'));
+  if(el) el.classList.toggle('done',val);
+  updateSummary();
 }
 
 function updateSummary(){
   const entries=DAYS.map(d=>({date:fmtDate(d),w:parseFloat(data[fmtDate(d)]?.weight)})).filter(e=>!isNaN(e.w));
   const el=document.getElementById('summary');
-  if(entries.length===0){el.innerHTML='<div class="stat">Enter your first weight to see stats</div>';return;}
-  const first=entries[0].w;
-  const last=entries[entries.length-1].w;
-  const diff=last-first;
-  const sign=diff>0?'+':'';
-  const daySpan=Math.max(1,Math.round((new Date(entries[entries.length-1].date)-new Date(entries[0].date))/(86400000)));
-  const avgPerDay=(diff/daySpan).toFixed(2);
-  const avgSign=avgPerDay>0?'+':'';
-  el.innerHTML=
-    `<div class="stat">Start: <strong>${first} kg</strong></div>`+
-    `<div class="stat">Current: <strong>${last} kg</strong></div>`+
-    `<div class="stat">Change: <strong>${sign}${diff.toFixed(1)} kg</strong></div>`+
-    `<div class="stat">Avg/day: <strong>${avgSign}${avgPerDay} kg</strong></div>`+
-    `<div class="stat">Entries: <strong>${entries.length}</strong></div>`+
-    `<div class="stat">Days tracked: <strong>${daySpan}</strong></div>`;
+
+  // Calorie stats
+  const calDays=[];
+  DAYS.forEach(d=>{
+    const key=fmtDate(d);
+    const c=dayCal(key,d);
+    if(c>0) calDays.push(c);
+  });
+  const totalCal=calDays.reduce((a,b)=>a+b,0);
+  const avgCal=calDays.length?Math.round(totalCal/calDays.length):0;
+  const lowCal=calDays.length?Math.min(...calDays):0;
+  const highCal=calDays.length?Math.max(...calDays):0;
+
+  if(entries.length===0 && calDays.length===0){
+    el.innerHTML='<div class="summary-row"><div class="stat">Enter your first weight to see stats</div></div>';
+    return;
+  }
+
+  let weightHTML='';
+  if(entries.length>0){
+    const first=entries[0].w;
+    const last=entries[entries.length-1].w;
+    const diff=last-first;
+    const sign=diff>0?'+':'';
+    const daySpan=Math.max(1,Math.round((new Date(entries[entries.length-1].date)-new Date(entries[0].date))/(86400000)));
+    const avgPerDay=(diff/daySpan).toFixed(2);
+    const avgSign=avgPerDay>0?'+':'';
+    const low=Math.min(...entries.map(e=>e.w));
+    const high=Math.max(...entries.map(e=>e.w));
+    weightHTML=`<div class="summary-row">`+
+      `<div class="stat">Start: <strong>${first} kg</strong></div>`+
+      `<div class="stat">Current: <strong>${last} kg</strong></div>`+
+      `<div class="stat">Change: <strong>${sign}${diff.toFixed(1)} kg</strong></div>`+
+      `<div class="stat">Avg/day: <strong>${avgSign}${avgPerDay} kg</strong></div>`+
+      `<div class="stat">Entries: <strong>${entries.length}</strong></div>`+
+      `<div class="stat">Days: <strong>${daySpan}</strong></div>`+
+      `<div class="stat">Low: <strong>${low} kg</strong></div>`+
+      `<div class="stat">High: <strong>${high} kg</strong></div>`+
+      `</div>`;
+  }
+
+  let calHTML='';
+  if(calDays.length>0){
+    calHTML=`<div class="summary-row">`+
+      `<div class="stat">Total Cal: <strong class="cal">${totalCal} kcal</strong></div>`+
+      `<div class="stat">Avg/day: <strong class="cal">${avgCal} kcal</strong></div>`+
+      `<div class="stat">Low Day: <strong class="cal">${lowCal} kcal</strong></div>`+
+      `<div class="stat">High Day: <strong class="cal">${highCal} kcal</strong></div>`+
+      `<div class="stat">Days w/ food: <strong class="cal">${calDays.length}</strong></div>`+
+      `</div>`;
+  }
+
+  el.innerHTML=weightHTML+calHTML;
 }
 
 function exportWeightsCSV(){
@@ -216,16 +289,17 @@ function exportWeightsCSV(){
 
 function exportAllCSV(){
   const allChecks=[...new Set(DAYS.flatMap(d=>getChecks(d).map(c=>c.id)))];
-  let csv='#,Date,Day,Weight (kg),'+allChecks.join(',')+'\n';
+  let csv='#,Date,Day,Weight (kg),Calories,'+allChecks.join(',')+'\n';
   DAYS.forEach((d,i)=>{
     const key=fmtDate(d);
     const row=data[key]||{weight:'',checks:{}};
     const dayChecks=getChecks(d).map(x=>x.id);
+    const cal=dayCal(key,d);
     const vals=allChecks.map(c=>{
       if(!dayChecks.includes(c)) return 'N/A';
       return row.checks[c]?'YES':'NO';
     });
-    csv+=`${i+1},${key},${fmtDisplay(d)},${row.weight||''},${vals.join(',')}\n`;
+    csv+=`${i+1},${key},${fmtDisplay(d)},${row.weight||''},${cal},${vals.join(',')}\n`;
   });
   dl(csv,'huel-journey-full.csv','text/csv');
 }
