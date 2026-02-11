@@ -79,7 +79,10 @@ let data={};
 function isSunday(d){return d.getDay()===0}
 function isSaturday(d){return d.getDay()===6}
 function fmtDate(d){return d.toISOString().slice(0,10)}
-function todayKey(){const t=new Date();return fmtDate(t)}
+function todayKey(){
+  const t=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}));
+  return fmtDate(t);
+}
 function fmtDisplay(d){
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const months=['Jan','Feb','Mar'];
