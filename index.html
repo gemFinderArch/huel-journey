@@ -17,7 +17,16 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
-.day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px;opacity:.55;transition:opacity .3s}
+.day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px;opacity:.55;transition:opacity .3s;position:relative}
+.day-body{display:flex;gap:12px}
+.day-left{flex:1;min-width:0}
+.day-cal{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:90px;padding:8px;background:#0d1117;border-radius:8px;gap:4px}
+.day-cal .cal-total{font-size:1.2rem;font-weight:700;color:#d2a8ff}
+.day-cal .cal-label{font-size:.65rem;color:#8b949e;text-transform:uppercase}
+.day-cal .cal-extra{display:flex;align-items:center;gap:4px;margin-top:2px}
+.day-cal .cal-extra input{width:60px;background:#161b22;border:1px solid #30363d;color:#d2a8ff;padding:3px 5px;border-radius:4px;font-size:.8rem;text-align:center}
+.day-cal .cal-extra input:focus{outline:none;border-color:#d2a8ff}
+.day-cal .cal-extra-label{font-size:.6rem;color:#8b949e}
 .day-card.today{opacity:1;border-color:#58a6ff;border-width:2px;box-shadow:0 0 12px #58a6ff30}
 .day-card.sunday{border-color:#da3633;border-width:2px}
 .day-card.sunday.today{border-color:#58a6ff;box-shadow:0 0 12px #58a6ff30}
@@ -172,6 +181,7 @@ function dayCal(key){
   for(const [id,v] of Object.entries(row.checks||{})){
     if(v && CAL_MAP[id]) cal+=CAL_MAP[id];
   }
+  cal+=parseInt(row.extraCal)||0;
   return cal;
 }
 
@@ -242,7 +252,8 @@ function render(){
   container.innerHTML='';
   DAY_KEYS.forEach((key,i)=>{
     const info=DAY_DATA[key];
-    if(!data[key]) data[key]={weight:'',checks:{}};
+    if(!data[key]) data[key]={weight:'',checks:{},extraCal:''};
+    if(data[key].extraCal===undefined) data[key].extraCal='';
     const sun=info.dow===0;
     const isToday=key===tk;
     const card=document.createElement('div');
@@ -263,6 +274,10 @@ function render(){
     const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
     const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
 
+    const huelCal=dayCal(key)-(parseInt(data[key].extraCal)||0);
+    const extraCal=parseInt(data[key].extraCal)||0;
+    const totalCal=huelCal+extraCal;
+
     card.innerHTML=`
       <div class="day-header">
         <div class="day-label"><span class="id">#${i+1}</span>${info.date.getDate()} <span class="dow">${fmtDisplay(info.dow,info.date)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}${isToday?'<span class="today-tag">TODAY</span>':''}</div>
@@ -272,9 +287,21 @@ function render(){
           <span class="kg">kg</span>
         </div>
       </div>
-      <div class="checks">
-        ${posRow?`<div class="check-row">${posRow}</div>`:''}
-        <div class="check-row">${negRow}</div>
+      <div class="day-body">
+        <div class="day-left">
+          <div class="checks">
+            ${posRow?`<div class="check-row">${posRow}</div>`:''}
+            <div class="check-row">${negRow}</div>
+          </div>
+        </div>
+        <div class="day-cal">
+          <div class="cal-total">${totalCal}</div>
+          <div class="cal-label">kcal</div>
+          <div class="cal-extra">
+            <input type="number" min="0" step="10" value="${data[key].extraCal||''}" placeholder="+extra" onchange="setExtra('${key}',this.value)" onfocus="this.select()">
+          </div>
+          <div class="cal-extra-label">extra cal</div>
+        </div>
       </div>`;
     container.appendChild(card);
   });
@@ -287,11 +314,27 @@ function setWeight(key,val){
   updateSummary();
 }
 
+function setExtra(key,val){
+  data[key].extraCal=val;
+  save();
+  const card=document.getElementById('day-'+key);
+  if(card){
+    const totalEl=card.querySelector('.cal-total');
+    if(totalEl) totalEl.textContent=dayCal(key);
+  }
+  updateSummary();
+}
+
 function toggle(key,check,val){
   data[key].checks[check]=val;
   save();
   const el=document.getElementById('w_'+key+'_'+check.replace(/\s+/g,'_'));
   if(el) el.classList.toggle('done',val);
+  const card=document.getElementById('day-'+key);
+  if(card){
+    const totalEl=card.querySelector('.cal-total');
+    if(totalEl) totalEl.textContent=dayCal(key);
+  }
   updateSummary();
 }
 
@@ -365,17 +408,19 @@ function exportWeightsCSV(){
 
 function exportAllCSV(){
   const allChecks=[...new Set(DAY_KEYS.flatMap(k=>getChecks(DAY_DATA[k].dow).map(c=>c.id)))];
-  let csv='#,Date,Day,Weight (kg),Calories,'+allChecks.join(',')+'\n';
+  let csv='#,Date,Day,Weight (kg),Huel Cal,Extra Cal,Total Cal,'+allChecks.join(',')+'\n';
   DAY_KEYS.forEach((k,i)=>{
     const info=DAY_DATA[k];
-    const row=data[k]||{weight:'',checks:{}};
+    const row=data[k]||{weight:'',checks:{},extraCal:''};
     const dayChecks=getChecks(info.dow).map(x=>x.id);
-    const cal=dayCal(k);
+    const totalCal=dayCal(k);
+    const extra=parseInt(row.extraCal)||0;
+    const huelCal=totalCal-extra;
     const vals=allChecks.map(c=>{
       if(!dayChecks.includes(c)) return 'N/A';
       return row.checks[c]?'YES':'NO';
     });
-    csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${cal},${vals.join(',')}\n`;
+    csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${huelCal},${extra},${totalCal},${vals.join(',')}\n`;
   });
   dl(csv,'huel-journey-full.csv','text/csv');
 }
