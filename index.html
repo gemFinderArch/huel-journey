@@ -260,8 +260,8 @@ function render(){
       const doneClass=checked?' done':'';
       return `<div class="chk ${c.type}${doneClass}" id="w_${cid}"><input type="checkbox" id="${cid}" ${chkAttr} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
     };
-    const topRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
-    const botRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
+    const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
+    const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
 
     card.innerHTML=`
       <div class="day-header">
@@ -273,8 +273,8 @@ function render(){
         </div>
       </div>
       <div class="checks">
-        <div class="check-row">${topRow}</div>
-        ${botRow?`<div class="check-row">${botRow}</div>`:''}
+        ${posRow?`<div class="check-row">${posRow}</div>`:''}
+        <div class="check-row">${negRow}</div>
       </div>`;
     container.appendChild(card);
   });
