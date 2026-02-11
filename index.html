@@ -115,10 +115,12 @@ function todayKeyInTZ(){
 
 function updateClock(){
   const n=nowInTZ();
-  const h=String(n.getHours()).padStart(2,'0');
+  const hr=n.getHours();
+  const ampm=hr>=12?'PM':'AM';
+  const h12=hr%12||12;
   const m=String(n.getMinutes()).padStart(2,'0');
   const s=String(n.getSeconds()).padStart(2,'0');
-  document.getElementById('clock').textContent=h+':'+m+':'+s;
+  document.getElementById('clock').textContent=h12+':'+m+':'+s+' '+ampm;
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('clock-date').textContent=days[n.getDay()]+', '+n.getDate()+' '+months[n.getMonth()]+' '+n.getFullYear()+' — '+tz.replace(/_/g,' ');
