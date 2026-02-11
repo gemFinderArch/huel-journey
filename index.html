@@ -8,6 +8,10 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;padding:12px;max-width:900px;margin:0 auto}
+.clock-bar{text-align:center;margin-bottom:6px}
+.clock-time{font-size:1.1rem;color:#e6edf3;font-weight:700;font-variant-numeric:tabular-nums}
+.clock-date{color:#8b949e;font-size:.85rem}
+.tz-select{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:3px 6px;border-radius:5px;font-size:.75rem;margin-top:4px;cursor:pointer}
 h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .sub{text-align:center;color:#8b949e;font-size:.85rem;margin-bottom:16px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
@@ -48,6 +52,13 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 </style>
 </head>
 <body>
+
+<div class="clock-bar">
+  <div class="clock-time" id="clock"></div>
+  <div class="clock-date" id="clock-date"></div>
+  <select class="tz-select" id="tz-select" onchange="changeTZ(this.value)"></select>
+</div>
+
 <h1>Huel Journey</h1>
 <p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 9, 2026 &middot; 28 days &middot; 4 weeks</p>
 
@@ -61,12 +72,75 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 <div id="days"></div>
 
 <script>
-const START=new Date(2026,1,10);
-const END=new Date(2026,2,9);
-const DAYS=[];
-for(let d=new Date(START);d<=END;d.setDate(d.getDate()+1)){
-  DAYS.push(new Date(d));
+// Timezone handling
+const TIMEZONES=[
+  'Europe/Rome','Europe/London','Europe/Berlin','Europe/Paris','Europe/Madrid',
+  'Europe/Amsterdam','Europe/Brussels','Europe/Vienna','Europe/Warsaw','Europe/Zurich',
+  'Europe/Athens','Europe/Bucharest','Europe/Helsinki','Europe/Istanbul','Europe/Moscow',
+  'US/Eastern','US/Central','US/Mountain','US/Pacific',
+  'Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Asia/Dubai',
+  'Australia/Sydney','Pacific/Auckland','UTC'
+];
+const TZ_KEY='huel-journey-tz';
+let tz=localStorage.getItem(TZ_KEY)||'Europe/Rome';
+
+function initTZSelect(){
+  const sel=document.getElementById('tz-select');
+  TIMEZONES.forEach(t=>{
+    const opt=document.createElement('option');
+    opt.value=t;opt.textContent=t.replace(/_/g,' ');
+    if(t===tz) opt.selected=true;
+    sel.appendChild(opt);
+  });
 }
+
+function changeTZ(v){
+  tz=v;
+  localStorage.setItem(TZ_KEY,tz);
+  render();
+  setTimeout(()=>{
+    const el=document.querySelector('.day-card.today');
+    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
+  },50);
+}
+
+function nowInTZ(){
+  return new Date(new Date().toLocaleString('en-US',{timeZone:tz}));
+}
+
+function todayKeyInTZ(){
+  const n=nowInTZ();
+  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+}
+
+function updateClock(){
+  const n=nowInTZ();
+  const h=String(n.getHours()).padStart(2,'0');
+  const m=String(n.getMinutes()).padStart(2,'0');
+  const s=String(n.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent=h+':'+m+':'+s;
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('clock-date').textContent=days[n.getDay()]+', '+n.getDate()+' '+months[n.getMonth()]+' '+n.getFullYear()+' — '+tz.replace(/_/g,' ');
+}
+
+// Date range — use plain YYYY-MM-DD strings to avoid timezone issues
+const DAY_KEYS=[];
+const DAY_DATA={};
+(function(){
+  let y=2026,m=2,d=10;
+  const end='2026-03-09';
+  while(true){
+    const key=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const dateObj=new Date(y,m-1,d);
+    DAY_KEYS.push(key);
+    DAY_DATA[key]={date:dateObj,dow:dateObj.getDay()};
+    if(key===end) break;
+    d++;
+    const maxD=new Date(y,m,0).getDate();
+    if(d>maxD){d=1;m++;if(m>12){m=1;y++;}}
+  }
+})();
 
 const NEG=['NO CIGARETTE','NO ALCOHOL','NO EXTRA FOOD OR DRINK','NO PHONE','NO WASTE'];
 const POS_BASE=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Meal 4','Huel Drink'];
@@ -76,22 +150,9 @@ const LS_KEY='huel-journey-data';
 
 let data={};
 
-function isSunday(d){return d.getDay()===0}
-function isSaturday(d){return d.getDay()===6}
-function fmtDate(d){return d.toISOString().slice(0,10)}
-function todayKey(){
-  const t=new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Rome'}));
-  return fmtDate(t);
-}
-function fmtDisplay(d){
-  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const months=['Jan','Feb','Mar'];
-  return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
-}
-
-function getChecks(d){
-  const sun=isSunday(d);
-  const sat=isSaturday(d);
+function getChecks(dow){
+  const sun=dow===0;
+  const sat=dow===6;
   const list=[];
   if(sun) list.push({id:'FASTING',type:'fast'});
   NEG.forEach(n=>list.push({id:n,type:'neg'}));
@@ -102,7 +163,7 @@ function getChecks(d){
   return list;
 }
 
-function dayCal(key,d){
+function dayCal(key){
   const row=data[key];
   if(!row) return 0;
   let cal=0;
@@ -110,6 +171,12 @@ function dayCal(key,d){
     if(v && CAL_MAP[id]) cal+=CAL_MAP[id];
   }
   return cal;
+}
+
+function fmtDisplay(dow,date){
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const months=['Jan','Feb','Mar'];
+  return days[dow]+', '+months[date.getMonth()]+' '+date.getDate();
 }
 
 function save(){
@@ -147,6 +214,10 @@ function loadIDB(){
 }
 
 async function init(){
+  initTZSelect();
+  updateClock();
+  setInterval(updateClock,1000);
+
   const ls=localStorage.getItem(LS_KEY);
   const idb=await loadIDB();
   if(ls) data=JSON.parse(ls);
@@ -165,12 +236,12 @@ async function init(){
 
 function render(){
   const container=document.getElementById('days');
-  const tk=todayKey();
+  const tk=todayKeyInTZ();
   container.innerHTML='';
-  DAYS.forEach((d,i)=>{
-    const key=fmtDate(d);
+  DAY_KEYS.forEach((key,i)=>{
+    const info=DAY_DATA[key];
     if(!data[key]) data[key]={weight:'',checks:{}};
-    const sun=isSunday(d);
+    const sun=info.dow===0;
     const isToday=key===tk;
     const card=document.createElement('div');
     let cls='day-card';
@@ -179,7 +250,7 @@ function render(){
     card.className=cls;
     card.id='day-'+key;
 
-    const checks=getChecks(d);
+    const checks=getChecks(info.dow);
     const mkChk=c=>{
       const cid=key+'_'+c.id.replace(/\s+/g,'_');
       const checked=data[key].checks[c.id];
@@ -192,7 +263,7 @@ function render(){
 
     card.innerHTML=`
       <div class="day-header">
-        <div class="day-label"><span class="id">#${i+1}</span>${d.getDate()} <span class="dow">${fmtDisplay(d)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}${isToday?'<span class="today-tag">TODAY</span>':''}</div>
+        <div class="day-label"><span class="id">#${i+1}</span>${info.date.getDate()} <span class="dow">${fmtDisplay(info.dow,info.date)}</span>${sun?'<span class="sun-tag">FASTING DAY</span>':''}${isToday?'<span class="today-tag">TODAY</span>':''}</div>
         <div class="weight-box">
           <label>Weight</label>
           <input type="number" step="0.1" min="30" max="300" value="${data[key].weight}" placeholder="kg" onchange="setWeight('${key}',this.value)" onfocus="this.select()">
@@ -223,14 +294,12 @@ function toggle(key,check,val){
 }
 
 function updateSummary(){
-  const entries=DAYS.map(d=>({date:fmtDate(d),w:parseFloat(data[fmtDate(d)]?.weight)})).filter(e=>!isNaN(e.w));
+  const entries=DAY_KEYS.map(k=>({key:k,w:parseFloat(data[k]?.weight)})).filter(e=>!isNaN(e.w));
   const el=document.getElementById('summary');
 
-  // Calorie stats
   const calDays=[];
-  DAYS.forEach(d=>{
-    const key=fmtDate(d);
-    const c=dayCal(key,d);
+  DAY_KEYS.forEach(k=>{
+    const c=dayCal(k);
     if(c>0) calDays.push(c);
   });
   const totalCal=calDays.reduce((a,b)=>a+b,0);
@@ -249,7 +318,9 @@ function updateSummary(){
     const last=entries[entries.length-1].w;
     const diff=last-first;
     const sign=diff>0?'+':'';
-    const daySpan=Math.max(1,Math.round((new Date(entries[entries.length-1].date)-new Date(entries[0].date))/(86400000)));
+    const fi=DAY_KEYS.indexOf(entries[0].key);
+    const li=DAY_KEYS.indexOf(entries[entries.length-1].key);
+    const daySpan=Math.max(1,li-fi);
     const avgPerDay=(diff/daySpan).toFixed(2);
     const avgSign=avgPerDay>0?'+':'';
     const low=Math.min(...entries.map(e=>e.w));
@@ -282,27 +353,27 @@ function updateSummary(){
 
 function exportWeightsCSV(){
   let csv='Date,Day,Weight (kg)\n';
-  DAYS.forEach(d=>{
-    const key=fmtDate(d);
-    const w=data[key]?.weight||'';
-    csv+=`${key},${fmtDisplay(d)},${w}\n`;
+  DAY_KEYS.forEach(k=>{
+    const info=DAY_DATA[k];
+    const w=data[k]?.weight||'';
+    csv+=`${k},${fmtDisplay(info.dow,info.date)},${w}\n`;
   });
   dl(csv,'huel-weights.csv','text/csv');
 }
 
 function exportAllCSV(){
-  const allChecks=[...new Set(DAYS.flatMap(d=>getChecks(d).map(c=>c.id)))];
+  const allChecks=[...new Set(DAY_KEYS.flatMap(k=>getChecks(DAY_DATA[k].dow).map(c=>c.id)))];
   let csv='#,Date,Day,Weight (kg),Calories,'+allChecks.join(',')+'\n';
-  DAYS.forEach((d,i)=>{
-    const key=fmtDate(d);
-    const row=data[key]||{weight:'',checks:{}};
-    const dayChecks=getChecks(d).map(x=>x.id);
-    const cal=dayCal(key,d);
+  DAY_KEYS.forEach((k,i)=>{
+    const info=DAY_DATA[k];
+    const row=data[k]||{weight:'',checks:{}};
+    const dayChecks=getChecks(info.dow).map(x=>x.id);
+    const cal=dayCal(k);
     const vals=allChecks.map(c=>{
       if(!dayChecks.includes(c)) return 'N/A';
       return row.checks[c]?'YES':'NO';
     });
-    csv+=`${i+1},${key},${fmtDisplay(d)},${row.weight||''},${cal},${vals.join(',')}\n`;
+    csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${cal},${vals.join(',')}\n`;
   });
   dl(csv,'huel-journey-full.csv','text/csv');
 }
