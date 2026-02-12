@@ -22,16 +22,34 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .inv-body{margin-top:10px;display:none}
 .inv-body.open{display:block}
 .inv-section-title{font-size:.8rem;color:#8b949e;margin-bottom:6px;border-bottom:1px solid #21262d;padding-bottom:3px}
-.inv-item{display:flex;align-items:center;padding:4px 0;font-size:.8rem;gap:6px}
-.inv-item .inv-name{flex:1}
-.inv-item .inv-used{color:#484f58;font-size:.75rem}
-.inv-item .inv-left{color:#3fb950;font-weight:600;min-width:18px;text-align:center}
+.inv-item{text-align:center;padding:10px 0;font-size:.8rem;border-bottom:1px solid #21262d}
+.inv-item:last-of-type{border-bottom:none}
+.inv-row1{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:5px}
+.inv-item .inv-name{font-weight:600}
 .inv-item.depleted .inv-name{color:#484f58;text-decoration:line-through}
+.inv-row2{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.inv-stat{display:inline-flex;align-items:center;gap:4px}
+.inv-lbl{color:#484f58;font-size:.7rem}
+.inv-val-used{color:#484f58;font-size:.8rem}
+.inv-total-input{width:45px;background:#0d1117;border:1px solid #30363d;color:#8b949e;padding:2px 4px;border-radius:3px;font-size:.8rem;text-align:center}
+.inv-total-input:focus{outline:none;border-color:#58a6ff}
+.inv-item .inv-left{color:#3fb950;font-weight:600;min-width:18px;text-align:center;display:inline-block}
 .inv-item.depleted .inv-left{color:#da3633}
-.inv-btn{background:#21262d;border:1px solid #30363d;color:#e6edf3;width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;padding:0}
+.inv-btn{background:#21262d;border:1px solid #30363d;color:#e6edf3;width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:.8rem;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .inv-btn:hover{background:#30363d}
 .inv-del{background:none;border:none;color:#484f58;cursor:pointer;font-size:.7rem;padding:2px 4px;border-radius:3px}
 .inv-del:hover{color:#da3633;background:#da363320}
+.meal-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:999}
+.meal-modal-overlay.open{display:flex}
+.meal-modal{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:20px;min-width:280px;text-align:center}
+.meal-modal h3{color:#58a6ff;margin-bottom:12px;font-size:1rem}
+.meal-modal select{width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;padding:8px;border-radius:6px;font-size:.9rem;margin-bottom:14px}
+.meal-modal select:focus{outline:none;border-color:#58a6ff}
+.meal-modal-btns{display:flex;gap:10px;justify-content:center}
+.meal-modal-btns button{padding:8px 20px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:.85rem}
+.meal-modal-btns .btn-cancel{background:#21262d;color:#e6edf3}
+.meal-modal-btns .btn-confirm{background:#238636;color:#fff;border-color:#238636}
+.meal-modal-btns button:hover{opacity:.85}
 .inv-add{margin-top:10px;padding-top:10px;border-top:1px solid #21262d}
 .inv-add input{background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:6px 8px;border-radius:5px;font-size:.8rem;width:100%}
 .inv-add input:focus{outline:none;border-color:#58a6ff}
@@ -108,6 +126,17 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 
 <div id="days"></div>
 
+<div class="meal-modal-overlay" id="meal-modal">
+  <div class="meal-modal">
+    <h3 id="meal-modal-title">Choose Meal Flavor</h3>
+    <select id="meal-modal-select"></select>
+    <div class="meal-modal-btns">
+      <button class="btn-cancel" onclick="mealModalCancel()">Cancel</button>
+      <button class="btn-confirm" onclick="mealModalConfirm()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Inventory ──
 const DEFAULT_STOCK={
@@ -158,11 +187,12 @@ const CAL_MAP={'Huel Meal 1':400,'Huel Meal 2':400,'Huel Meal 3':400,'Huel Meal 
 const DB_NAME='huel-journey';const LS_KEY='huel-journey-data';
 let data={};
 
-function getChecks(dow){
+function getChecks(dow,key){
   const sun=dow===0;const sat=dow===6;const list=[];
+  const hasBar=key<='2026-02-12';
   if(sun) list.push({id:'FASTING',type:'fast'});
   NEG.forEach(n=>list.push({id:n,type:'neg'}));
-  if(!sun){POS_BASE.forEach(p=>list.push({id:p,type:'pos'}));if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});}
+  if(!sun){POS_BASE.forEach(p=>{if((p==='Huel Bar 1'||p==='Huel Bar 2')&&!hasBar) return;list.push({id:p,type:'pos'});});if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});}
   return list;
 }
 function dayCal(key){
@@ -196,12 +226,15 @@ function renderInventory(){
     const dep=it.left<=0?' depleted':'';
     const eName=it.name.replace(/'/g,"\\'");
     return `<div class="inv-item${dep}">
-      <button class="inv-btn" onclick="invAdj('${eName}',-1)">-</button>
-      <span class="inv-left">${Math.max(0,it.left)}</span>
-      <button class="inv-btn" onclick="invAdj('${eName}',1)">+</button>
-      <span class="inv-name">${it.name}</span>
-      <span class="inv-used">${it.used}/${it.total}</span>
-      <button class="inv-del" onclick="invDel('${eName}')" title="Remove">✕</button>
+      <div class="inv-row1">
+        <span class="inv-name">${it.name}</span>
+        <button class="inv-del" onclick="invDel('${eName}')" title="Remove">✕</button>
+      </div>
+      <div class="inv-row2">
+        <span class="inv-stat"><span class="inv-lbl">total</span> <input class="inv-total-input" type="number" min="0" value="${it.total}" onchange="invSetTotal('${eName}',this.value)"></span>
+        <span class="inv-stat"><span class="inv-lbl">used</span> <span class="inv-val-used">${it.used}</span></span>
+        <span class="inv-stat"><span class="inv-lbl">left</span> <button class="inv-btn" onclick="invAdj('${eName}',-1)">-</button> <span class="inv-left">${Math.max(0,it.left)}</span> <button class="inv-btn" onclick="invAdj('${eName}',1)">+</button></span>
+      </div>
     </div>`;
   };
 
@@ -223,6 +256,36 @@ function invDel(name){
   if(!confirm('Remove "'+name+'" from inventory?')) return;
   delete invStock[name];
   saveInv();renderInventory();render();
+}
+function invSetTotal(name,val){
+  const v=parseInt(val);if(isNaN(v)||v<0) return;
+  invStock[name]=v;saveInv();renderInventory();
+}
+
+// ── Meal picker modal ──
+let pendingMeal=null;
+function showMealModal(key,slot){
+  pendingMeal={key,slot};
+  const flavors=getMealFlavors();
+  const sel=document.getElementById('meal-modal-select');
+  sel.innerHTML='<option value="">-- choose flavor --</option>'+flavors.map(f=>`<option value="${f}">${f}</option>`).join('');
+  document.getElementById('meal-modal-title').textContent='Choose flavor for '+slot;
+  document.getElementById('meal-modal').classList.add('open');
+}
+function mealModalConfirm(){
+  const sel=document.getElementById('meal-modal-select');
+  if(!sel.value){sel.style.borderColor='#da3633';return;}
+  const{key,slot}=pendingMeal;
+  data[key].checks[slot]=true;
+  if(!data[key].picks) data[key].picks={};
+  data[key].picks[slot]=sel.value;
+  save();
+  document.getElementById('meal-modal').classList.remove('open');
+  render();pendingMeal=null;
+}
+function mealModalCancel(){
+  document.getElementById('meal-modal').classList.remove('open');
+  pendingMeal=null;
 }
 
 function addInvItems(){
@@ -295,7 +358,7 @@ function render(){
     let cls='day-card';if(sun) cls+=' sunday';if(isToday) cls+=' today';
     card.className=cls;card.id='day-'+key;
 
-    const checks=getChecks(info.dow);
+    const checks=getChecks(info.dow,key);
     const mkChk=buildMkChk(key);
     const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
     const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
@@ -330,12 +393,17 @@ function setExtra(key,val){data[key].extraCal=val;save();const card=document.get
 function pickMeal(key,slot,val){if(!data[key].picks) data[key].picks={};data[key].picks[slot]=val;save();renderInventory();}
 
 function toggle(key,check,val){
+  if(val && MEAL_SLOTS.includes(check)){
+    const cid=key+'_'+check.replace(/\s+/g,'_');
+    document.getElementById(cid).checked=false;
+    showMealModal(key,check);return;
+  }
   data[key].checks[check]=val;
   if(!val && data[key].picks) data[key].picks[check]='';
   save();
   const card=document.getElementById('day-'+key);
   if(card){
-    const info=DAY_DATA[key];const checks=getChecks(info.dow);
+    const info=DAY_DATA[key];const checks=getChecks(info.dow,key);
     const mkChk=buildMkChk(key);
     const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
     const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
@@ -376,9 +444,9 @@ function updateSummary(){
 // ── Export ──
 function exportWeightsCSV(){let csv='Date,Day,Weight (kg)\n';DAY_KEYS.forEach(k=>{const info=DAY_DATA[k];csv+=`${k},${fmtDisplay(info.dow,info.date)},${data[k]?.weight||''}\n`;});dl(csv,'huel-weights.csv','text/csv');}
 function exportAllCSV(){
-  const allChecks=[...new Set(DAY_KEYS.flatMap(k=>getChecks(DAY_DATA[k].dow).map(c=>c.id)))];
+  const allChecks=[...new Set(DAY_KEYS.flatMap(k=>getChecks(DAY_DATA[k].dow,k).map(c=>c.id)))];
   let csv='#,Date,Day,Weight (kg),Huel Cal,Extra Cal,Total Cal,'+allChecks.join(',')+',Meal Picks\n';
-  DAY_KEYS.forEach((k,i)=>{const info=DAY_DATA[k];const row=data[k]||{weight:'',checks:{},extraCal:'',picks:{}};const dayChecks=getChecks(info.dow).map(x=>x.id);const totalCal=dayCal(k);const extra=parseInt(row.extraCal)||0;const huelCal=totalCal-extra;const vals=allChecks.map(c=>{if(!dayChecks.includes(c)) return 'N/A';return row.checks[c]?'YES':'NO';});const picks=Object.entries(row.picks||{}).filter(([s,v])=>v&&row.checks[s]).map(([s,v])=>s.replace('Huel ','')+':'+v).join('; ');csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${huelCal},${extra},${totalCal},${vals.join(',')},${picks}\n`;});
+  DAY_KEYS.forEach((k,i)=>{const info=DAY_DATA[k];const row=data[k]||{weight:'',checks:{},extraCal:'',picks:{}};const dayChecks=getChecks(info.dow,k).map(x=>x.id);const totalCal=dayCal(k);const extra=parseInt(row.extraCal)||0;const huelCal=totalCal-extra;const vals=allChecks.map(c=>{if(!dayChecks.includes(c)) return 'N/A';return row.checks[c]?'YES':'NO';});const picks=Object.entries(row.picks||{}).filter(([s,v])=>v&&row.checks[s]).map(([s,v])=>s.replace('Huel ','')+':'+v).join('; ');csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${huelCal},${extra},${totalCal},${vals.join(',')},${picks}\n`;});
   dl(csv,'huel-journey-full.csv','text/csv');
 }
 function dl(content,name,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
