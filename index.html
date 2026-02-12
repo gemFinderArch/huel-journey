@@ -229,7 +229,7 @@ function renderInventory(){
   const totalLeft=items.reduce((a,b)=>a+Math.max(0,b.left),0);
   const totalAll=items.reduce((a,b)=>a+b.total,0);
   const totalUsed=items.reduce((a,b)=>a+b.used,0);
-  document.getElementById('inv-stats').innerHTML=`<span class="st-total">${totalAll} total</span><span class="st-used">${totalUsed} consumed</span><span class="st-left">${totalLeft} left</span>`;
+  document.getElementById('inv-stats').innerHTML=`<span class="st-total">total ${totalAll}</span><span class="st-used">consumed ${totalUsed}</span><span class="st-left">left ${totalLeft}</span>`;
 
   const mkItem=it=>{
     const dep=it.left<=0?' depleted':'';
@@ -241,7 +241,7 @@ function renderInventory(){
       </div>
       <div class="inv-row2">
         <span class="inv-stat"><span class="inv-lbl">total</span> <input class="inv-total-input" type="number" min="0" value="${it.total}" onchange="invSetTotal('${eName}',this.value)"></span>
-        <span class="inv-stat"><span class="inv-lbl">used</span> <span class="inv-val-used">${it.used}</span></span>
+        <span class="inv-stat"><span class="inv-lbl">consumed</span> <span class="inv-val-used">${it.used}</span></span>
         <span class="inv-stat"><span class="inv-lbl">left</span> <button class="inv-btn" onclick="invAdj('${eName}',-1)">-</button> <span class="inv-left">${Math.max(0,it.left)}</span> <button class="inv-btn" onclick="invAdj('${eName}',1)">+</button></span>
       </div>
     </div>`;
