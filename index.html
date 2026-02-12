@@ -18,14 +18,13 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
 .inv-panel{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:16px}
-.inv-toggle{background:none;border:none;color:#58a6ff;cursor:pointer;font-size:.9rem;font-weight:600;width:100%;text-align:left;padding:0}
-.inv-stats{font-size:.75rem;color:#8b949e;margin-top:4px}
-.inv-stats span{margin-right:12px}
+.inv-header{display:flex;align-items:center;cursor:pointer;gap:10px}
+.inv-title{color:#58a6ff;font-size:.9rem;font-weight:600;white-space:nowrap}
+.inv-stats{flex:1;text-align:center;font-size:.85rem;color:#8b949e}
 .inv-stats strong{color:#3fb950}
 .inv-stats .used{color:#484f58}
 .inv-body{margin-top:10px;display:none}
 .inv-body.open{display:block}
-.inv-section-title{font-size:.8rem;color:#8b949e;margin-bottom:6px;border-bottom:1px solid #21262d;padding-bottom:3px}
 .inv-item{text-align:center;padding:10px 0;font-size:.8rem;border-bottom:1px solid #21262d}
 .inv-item:last-of-type{border-bottom:none}
 .inv-row1{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:5px}
@@ -117,8 +116,10 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 <p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 9, 2026 &middot; 28 days &middot; 4 weeks</p>
 
 <div class="inv-panel">
-  <button class="inv-toggle" onclick="toggleInv()">Meal Inventory ▸</button>
-  <div class="inv-stats" id="inv-stats"></div>
+  <div class="inv-header" onclick="toggleInv()">
+    <span class="inv-title" id="inv-title">Meal Inventory ▸</span>
+    <span class="inv-stats" id="inv-stats"></span>
+  </div>
   <div class="inv-body" id="inv-body"></div>
 </div>
 
@@ -227,7 +228,7 @@ function renderInventory(){
   const totalLeft=items.reduce((a,b)=>a+Math.max(0,b.left),0);
   const totalAll=items.reduce((a,b)=>a+b.total,0);
   const totalUsed=items.reduce((a,b)=>a+b.used,0);
-  document.getElementById('inv-stats').innerHTML=`<span>Total: <strong>${totalAll}</strong> meals</span><span class="used">Used: ${totalUsed}</span><span>Left: <strong>${totalLeft}</strong></span>`;
+  document.getElementById('inv-stats').innerHTML=`Total: <strong>${totalAll}</strong> &nbsp;&middot;&nbsp; <span class="used">Consumed: ${totalUsed}</span>`;
 
   const mkItem=it=>{
     const dep=it.left<=0?' depleted':'';
@@ -246,7 +247,6 @@ function renderInventory(){
   };
 
   el.innerHTML=
-    `<div class="inv-section-title">Meal Inventory (${totalLeft} remaining)</div>`+
     items.map(mkItem).join('')+
     `<div class="inv-add">
       <input type="text" id="inv-add-input" placeholder="Add: name - qty, name - qty" onkeydown="if(event.key==='Enter')addInvItems()">
@@ -314,8 +314,9 @@ function addInvItems(){
 }
 
 function toggleInv(){
-  const body=document.getElementById('inv-body');const btn=body.previousElementSibling;
-  body.classList.toggle('open');btn.textContent=body.classList.contains('open')?'Meal Inventory ▾':'Meal Inventory ▸';
+  const body=document.getElementById('inv-body');
+  body.classList.toggle('open');
+  document.getElementById('inv-title').textContent=body.classList.contains('open')?'Meal Inventory ▾':'Meal Inventory ▸';
 }
 
 // ── Storage ──
