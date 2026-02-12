@@ -196,7 +196,7 @@ function getChecks(dow,key){
   const hasBar=key<='2026-02-12';
   if(sun) list.push({id:'FASTING',type:'fast'});
   NEG.forEach(n=>list.push({id:n,type:'neg'}));
-  if(!sun){POS_BASE.forEach(p=>{if((p==='Huel Bar 1'||p==='Huel Bar 2')&&!hasBar) return;list.push({id:p,type:'pos'});});if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});}
+  if(!sun){POS_BASE.forEach(p=>{if((p==='Huel Bar 1'||p==='Huel Bar 2')&&!hasBar) return;list.push({id:p,type:'pos'});});list.push({id:'1 Whole Fruit',type:'pos'});}
   return list;
 }
 function dayCal(key){
