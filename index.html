@@ -17,6 +17,23 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:20px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
+
+/* Inventory panel */
+.inv-panel{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:16px}
+.inv-toggle{background:none;border:none;color:#58a6ff;cursor:pointer;font-size:.9rem;font-weight:600;width:100%;text-align:left;padding:0}
+.inv-body{margin-top:10px;display:none}
+.inv-body.open{display:block}
+.inv-section{margin-bottom:10px}
+.inv-section-title{font-size:.8rem;color:#8b949e;margin-bottom:6px;border-bottom:1px solid #21262d;padding-bottom:3px}
+.inv-item{display:flex;align-items:center;justify-content:space-between;padding:3px 0;font-size:.8rem}
+.inv-item .inv-name{flex:1}
+.inv-item .inv-counts{display:flex;gap:8px;align-items:center}
+.inv-item .inv-left{color:#3fb950;font-weight:600;min-width:20px;text-align:right}
+.inv-item .inv-used{color:#484f58;font-size:.75rem;min-width:40px;text-align:right}
+.inv-item.depleted .inv-name{color:#484f58;text-decoration:line-through}
+.inv-item.depleted .inv-left{color:#da3633}
+
+/* Day cards */
 .day-card{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:12px;opacity:.55;transition:opacity .3s;position:relative}
 .day-body{display:flex;gap:12px}
 .day-left{flex:1;min-width:0}
@@ -44,13 +61,18 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .check-row{display:flex;flex-wrap:wrap;gap:6px 10px}
 .check-row+.check-row{margin-top:6px}
 .chk{display:flex;align-items:center;gap:5px;font-size:.8rem;padding:3px 0;transition:opacity .2s}
-.chk input{width:16px;height:16px;accent-color:#238636;cursor:pointer}
+.chk input[type=checkbox]{width:16px;height:16px;accent-color:#238636;cursor:pointer}
 .chk label{cursor:pointer;white-space:nowrap}
 .chk.neg label{color:#f0883e}
 .chk.pos label{color:#3fb950}
 .chk.fast label{color:#da3633;font-weight:600}
 .chk.done{opacity:.35}
 .chk.done label{text-decoration:line-through}
+.meal-select{background:#0d1117;color:#3fb950;border:1px solid #30363d;padding:2px 4px;border-radius:4px;font-size:.7rem;margin-left:4px;cursor:pointer;max-width:120px}
+.meal-select:focus{outline:none;border-color:#3fb950}
+.meal-picks{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
+.meal-picks .pick-tag{font-size:.65rem;background:#21262d;padding:2px 6px;border-radius:3px;color:#8b949e}
+
 .summary{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:16px;margin-bottom:20px}
 .summary-row{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 20px}
 .summary-row+.summary-row{margin-top:6px;padding-top:6px;border-top:1px solid #21262d}
@@ -71,6 +93,11 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 <h1>Huel Journey</h1>
 <p class="sub">Daily Tracker &middot; Feb 10 &ndash; Mar 9, 2026 &middot; 28 days &middot; 4 weeks</p>
 
+<div class="inv-panel">
+  <button class="inv-toggle" onclick="toggleInv()">Meal Inventory ▸</button>
+  <div class="inv-body" id="inv-body"></div>
+</div>
+
 <div class="summary" id="summary"></div>
 
 <div class="toolbar">
@@ -81,7 +108,31 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 <div id="days"></div>
 
 <script>
-// Timezone handling
+// ── Inventory: initial stock from order ──
+// Hot & Savoury bags = 7 servings each, Pots = 1 serving
+const MEAL_STOCK={
+  'Katsu Curry Noodles':8,     // 1 bag (7) + 1 pot
+  'Mac & Cheeze':14,           // 2 bags
+  'Hoisin Duck Noodles':8,     // 1 bag (7) + 1 pot
+  'Korean BBQ Noodles':8,      // 1 bag (7) + 1 pot
+  'Chickn & Mushroom Pasta':7,
+  'Mexican Chilli':7,
+  'Pasta Bolognese':7,
+  'Cajun Pasta':7,
+  'Thai Green Curry':7,
+  'Madras':7
+};
+const DRINK_STOCK={
+  'Banana RTD':6,
+  'Berry RTD':6,
+  'Vanilla RTD':1
+};
+const MEAL_FLAVORS=Object.keys(MEAL_STOCK);
+const DRINK_FLAVORS=Object.keys(DRINK_STOCK);
+const MEAL_SLOTS=['Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Meal 4'];
+const DRINK_SLOT='Huel Drink';
+
+// ── Timezone ──
 const TIMEZONES=[
   'Europe/Rome','Europe/London','Europe/Berlin','Europe/Paris','Europe/Madrid',
   'Europe/Amsterdam','Europe/Brussels','Europe/Vienna','Europe/Warsaw','Europe/Zurich',
@@ -102,166 +153,141 @@ function initTZSelect(){
     sel.appendChild(opt);
   });
 }
-
 function changeTZ(v){
-  tz=v;
-  localStorage.setItem(TZ_KEY,tz);
-  render();
-  setTimeout(()=>{
-    const el=document.querySelector('.day-card.today');
-    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
-  },50);
+  tz=v;localStorage.setItem(TZ_KEY,tz);render();
+  setTimeout(()=>{const el=document.querySelector('.day-card.today');if(el) el.scrollIntoView({behavior:'smooth',block:'center'});},50);
 }
-
-function nowInTZ(){
-  return new Date(new Date().toLocaleString('en-US',{timeZone:tz}));
-}
-
-function todayKeyInTZ(){
-  const n=nowInTZ();
-  return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
-}
-
+function nowInTZ(){return new Date(new Date().toLocaleString('en-US',{timeZone:tz}))}
+function todayKeyInTZ(){const n=nowInTZ();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')}
 function updateClock(){
-  const n=nowInTZ();
-  const hr=n.getHours();
-  const ampm=hr>=12?'PM':'AM';
-  const h12=hr%12||12;
-  const m=String(n.getMinutes()).padStart(2,'0');
-  const s=String(n.getSeconds()).padStart(2,'0');
+  const n=nowInTZ();const hr=n.getHours();const ampm=hr>=12?'PM':'AM';const h12=hr%12||12;
+  const m=String(n.getMinutes()).padStart(2,'0');const s=String(n.getSeconds()).padStart(2,'0');
   document.getElementById('clock').textContent=h12+':'+m+':'+s+' '+ampm;
   const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
   document.getElementById('clock-date').textContent=days[n.getDay()]+', '+n.getDate()+' '+months[n.getMonth()]+' '+n.getFullYear()+' — '+tz.replace(/_/g,' ');
 }
 
-// Date range — use plain YYYY-MM-DD strings to avoid timezone issues
-const DAY_KEYS=[];
-const DAY_DATA={};
+// ── Date range ──
+const DAY_KEYS=[];const DAY_DATA={};
 (function(){
-  let y=2026,m=2,d=10;
-  const end='2026-03-09';
+  let y=2026,m=2,d=10;const end='2026-03-09';
   while(true){
     const key=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     const dateObj=new Date(y,m-1,d);
-    DAY_KEYS.push(key);
-    DAY_DATA[key]={date:dateObj,dow:dateObj.getDay()};
+    DAY_KEYS.push(key);DAY_DATA[key]={date:dateObj,dow:dateObj.getDay()};
     if(key===end) break;
-    d++;
-    const maxD=new Date(y,m,0).getDate();
-    if(d>maxD){d=1;m++;if(m>12){m=1;y++;}}
+    d++;const maxD=new Date(y,m,0).getDate();if(d>maxD){d=1;m++;if(m>12){m=1;y++;}}
   }
 })();
 
+// ── Constants ──
 const NEG=['NO CIGARETTE','NO ALCOHOL','NO EXTRA FOOD OR DRINK','NO PHONE','NO WASTE'];
 const POS_BASE=['Creatine','Daily Greens','Huel Meal 1','Huel Meal 2','Huel Meal 3','Huel Meal 4','Huel Drink','Huel Bar 1','Huel Bar 2'];
 const CAL_MAP={'Huel Meal 1':400,'Huel Meal 2':400,'Huel Meal 3':400,'Huel Meal 4':400,'Huel Drink':400,'Daily Greens':25,'1 Whole Fruit':100,'Huel Bar 1':210,'Huel Bar 2':210};
-const DB_NAME='huel-journey';
-const LS_KEY='huel-journey-data';
+const DB_NAME='huel-journey';const LS_KEY='huel-journey-data';
 
 let data={};
 
 function getChecks(dow){
-  const sun=dow===0;
-  const sat=dow===6;
-  const list=[];
+  const sun=dow===0;const sat=dow===6;const list=[];
   if(sun) list.push({id:'FASTING',type:'fast'});
   NEG.forEach(n=>list.push({id:n,type:'neg'}));
-  if(!sun){
-    POS_BASE.forEach(p=>list.push({id:p,type:'pos'}));
-    if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});
-  }
+  if(!sun){POS_BASE.forEach(p=>list.push({id:p,type:'pos'}));if(!sat) list.push({id:'1 Whole Fruit',type:'pos'});}
   return list;
 }
 
 function dayCal(key){
-  const row=data[key];
-  if(!row) return 0;
+  const row=data[key];if(!row) return 0;
   let cal=0;
-  for(const [id,v] of Object.entries(row.checks||{})){
-    if(v && CAL_MAP[id]) cal+=CAL_MAP[id];
-  }
+  for(const [id,v] of Object.entries(row.checks||{})){if(v && CAL_MAP[id]) cal+=CAL_MAP[id];}
   cal+=parseInt(row.extraCal)||0;
   return cal;
 }
 
 function fmtDisplay(dow,date){
-  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const months=['Jan','Feb','Mar'];
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const months=['Jan','Feb','Mar'];
   return days[dow]+', '+months[date.getMonth()]+' '+date.getDate();
 }
 
-function save(){
-  localStorage.setItem(LS_KEY,JSON.stringify(data));
-  saveIDB();
-}
-
-function saveIDB(){
-  try{
-    const req=indexedDB.open(DB_NAME,1);
-    req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
-    req.onsuccess=e=>{
-      const db=e.target.result;
-      const tx=db.transaction('data','readwrite');
-      tx.objectStore('data').put(JSON.stringify(data),'main');
-    };
-  }catch(e){}
-}
-
-function loadIDB(){
-  return new Promise(res=>{
-    try{
-      const req=indexedDB.open(DB_NAME,1);
-      req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
-      req.onsuccess=e=>{
-        const db=e.target.result;
-        const tx=db.transaction('data','readonly');
-        const g=tx.objectStore('data').get('main');
-        g.onsuccess=()=>res(g.result?JSON.parse(g.result):null);
-        g.onerror=()=>res(null);
-      };
-      req.onerror=()=>res(null);
-    }catch(e){res(null)}
+// ── Inventory computation ──
+function getConsumed(){
+  const meals={};MEAL_FLAVORS.forEach(f=>meals[f]=0);
+  const drinks={};DRINK_FLAVORS.forEach(f=>drinks[f]=0);
+  DAY_KEYS.forEach(k=>{
+    const row=data[k];if(!row||!row.picks) return;
+    MEAL_SLOTS.forEach(slot=>{
+      const pick=row.picks[slot];
+      if(pick && row.checks[slot] && meals[pick]!==undefined) meals[pick]++;
+    });
+    const dp=row.picks[DRINK_SLOT];
+    if(dp && row.checks[DRINK_SLOT] && drinks[dp]!==undefined) drinks[dp]++;
   });
+  return {meals,drinks};
 }
 
-async function init(){
-  initTZSelect();
-  updateClock();
-  setInterval(updateClock,1000);
+function renderInventory(){
+  const {meals,drinks}=getConsumed();
+  const el=document.getElementById('inv-body');
 
-  const ls=localStorage.getItem(LS_KEY);
-  const idb=await loadIDB();
+  const mealItems=MEAL_FLAVORS.map(f=>({name:f,total:MEAL_STOCK[f],used:meals[f],left:MEAL_STOCK[f]-meals[f]}))
+    .sort((a,b)=>b.left-a.left);
+  const drinkItems=DRINK_FLAVORS.map(f=>({name:f,total:DRINK_STOCK[f],used:drinks[f],left:DRINK_STOCK[f]-drinks[f]}))
+    .sort((a,b)=>b.left-a.left);
+
+  const mkItem=it=>{
+    const dep=it.left<=0?' depleted':'';
+    return `<div class="inv-item${dep}"><span class="inv-name">${it.name}</span><span class="inv-counts"><span class="inv-used">${it.used}/${it.total} used</span><span class="inv-left">${Math.max(0,it.left)}</span></span></div>`;
+  };
+
+  el.innerHTML=
+    `<div class="inv-section"><div class="inv-section-title">Hot & Savoury Meals (${mealItems.reduce((a,b)=>a+Math.max(0,b.left),0)} remaining)</div>${mealItems.map(mkItem).join('')}</div>`+
+    `<div class="inv-section"><div class="inv-section-title">Ready-to-Drink (${drinkItems.reduce((a,b)=>a+Math.max(0,b.left),0)} remaining)</div>${drinkItems.map(mkItem).join('')}</div>`;
+}
+
+function toggleInv(){
+  const body=document.getElementById('inv-body');
+  const btn=body.previousElementSibling;
+  body.classList.toggle('open');
+  btn.textContent=body.classList.contains('open')?'Meal Inventory ▾':'Meal Inventory ▸';
+}
+
+// ── Storage ──
+function save(){localStorage.setItem(LS_KEY,JSON.stringify(data));saveIDB();}
+function saveIDB(){
+  try{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
+  req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('data','readwrite');tx.objectStore('data').put(JSON.stringify(data),'main');};}catch(e){}
+}
+function loadIDB(){
+  return new Promise(res=>{try{const req=indexedDB.open(DB_NAME,1);req.onupgradeneeded=e=>{e.target.result.createObjectStore('data')};
+  req.onsuccess=e=>{const db=e.target.result;const tx=db.transaction('data','readonly');const g=tx.objectStore('data').get('main');
+  g.onsuccess=()=>res(g.result?JSON.parse(g.result):null);g.onerror=()=>res(null);};req.onerror=()=>res(null);}catch(e){res(null)}});
+}
+
+// ── Init ──
+async function init(){
+  initTZSelect();updateClock();setInterval(updateClock,1000);
+  const ls=localStorage.getItem(LS_KEY);const idb=await loadIDB();
   if(ls) data=JSON.parse(ls);
-  if(idb){
-    const idbKeys=Object.keys(idb);
-    const lsKeys=Object.keys(data);
-    if(idbKeys.length>lsKeys.length) data=idb;
-  }
+  if(idb){if(Object.keys(idb).length>Object.keys(data).length) data=idb;}
   if(!data||typeof data!=='object') data={};
   render();
-  setTimeout(()=>{
-    const el=document.querySelector('.day-card.today');
-    if(el) el.scrollIntoView({behavior:'smooth',block:'center'});
-  },100);
+  setTimeout(()=>{const el=document.querySelector('.day-card.today');if(el) el.scrollIntoView({behavior:'smooth',block:'center'});},100);
 }
 
+// ── Render ──
 function render(){
-  const container=document.getElementById('days');
-  const tk=todayKeyInTZ();
+  const container=document.getElementById('days');const tk=todayKeyInTZ();
   container.innerHTML='';
   DAY_KEYS.forEach((key,i)=>{
     const info=DAY_DATA[key];
-    if(!data[key]) data[key]={weight:'',checks:{},extraCal:''};
+    if(!data[key]) data[key]={weight:'',checks:{},extraCal:'',picks:{}};
+    if(!data[key].picks) data[key].picks={};
     if(data[key].extraCal===undefined) data[key].extraCal='';
-    const sun=info.dow===0;
-    const isToday=key===tk;
+    const sun=info.dow===0;const isToday=key===tk;
     const card=document.createElement('div');
-    let cls='day-card';
-    if(sun) cls+=' sunday';
-    if(isToday) cls+=' today';
-    card.className=cls;
-    card.id='day-'+key;
+    let cls='day-card';if(sun) cls+=' sunday';if(isToday) cls+=' today';
+    card.className=cls;card.id='day-'+key;
 
     const checks=getChecks(info.dow);
     const mkChk=c=>{
@@ -269,14 +295,26 @@ function render(){
       const checked=data[key].checks[c.id];
       const chkAttr=checked?'checked':'';
       const doneClass=checked?' done':'';
-      return `<div class="chk ${c.type}${doneClass}" id="w_${cid}"><input type="checkbox" id="${cid}" ${chkAttr} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label></div>`;
+      const isMealSlot=MEAL_SLOTS.includes(c.id);
+      const isDrinkSlot=c.id===DRINK_SLOT;
+      let selectHTML='';
+      if(checked && isMealSlot){
+        const opts=MEAL_FLAVORS.map(f=>`<option value="${f}"${data[key].picks[c.id]===f?' selected':''}>${f}</option>`).join('');
+        selectHTML=`<select class="meal-select" onchange="pickMeal('${key}','${c.id}',this.value)"><option value="">-- pick --</option>${opts}</select>`;
+      }
+      if(checked && isDrinkSlot){
+        const opts=DRINK_FLAVORS.map(f=>`<option value="${f}"${data[key].picks[c.id]===f?' selected':''}>${f}</option>`).join('');
+        selectHTML=`<select class="meal-select" onchange="pickMeal('${key}','${c.id}',this.value)"><option value="">-- pick --</option>${opts}</select>`;
+      }
+      return `<div class="chk ${c.type}${doneClass}" id="w_${cid}"><input type="checkbox" id="${cid}" ${chkAttr} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label>${selectHTML}</div>`;
     };
     const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
     const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
+    const totalCal=dayCal(key);
 
-    const huelCal=dayCal(key)-(parseInt(data[key].extraCal)||0);
-    const extraCal=parseInt(data[key].extraCal)||0;
-    const totalCal=huelCal+extraCal;
+    // Show picked meals as tags
+    const picks=data[key].picks||{};
+    const pickTags=Object.entries(picks).filter(([slot,val])=>val&&data[key].checks[slot]).map(([slot,val])=>`<span class="pick-tag">${slot.replace('Huel ','')}: ${val}</span>`).join('');
 
     card.innerHTML=`
       <div class="day-header">
@@ -293,6 +331,7 @@ function render(){
             ${posRow?`<div class="check-row">${posRow}</div>`:''}
             <div class="check-row">${negRow}</div>
           </div>
+          ${pickTags?`<div class="meal-picks">${pickTags}</div>`:''}
         </div>
         <div class="day-cal">
           <div class="cal-total">${totalCal}</div>
@@ -306,70 +345,93 @@ function render(){
     container.appendChild(card);
   });
   updateSummary();
+  renderInventory();
 }
 
-function setWeight(key,val){
-  data[key].weight=val;
-  save();
-  updateSummary();
-}
+// ── Actions ──
+function setWeight(key,val){data[key].weight=val;save();updateSummary();}
 
 function setExtra(key,val){
-  data[key].extraCal=val;
-  save();
+  data[key].extraCal=val;save();
   const card=document.getElementById('day-'+key);
-  if(card){
-    const totalEl=card.querySelector('.cal-total');
-    if(totalEl) totalEl.textContent=dayCal(key);
-  }
+  if(card){const t=card.querySelector('.cal-total');if(t)t.textContent=dayCal(key);}
   updateSummary();
+}
+
+function pickMeal(key,slot,val){
+  if(!data[key].picks) data[key].picks={};
+  data[key].picks[slot]=val;
+  save();renderInventory();
 }
 
 function toggle(key,check,val){
   data[key].checks[check]=val;
+  if(!val && data[key].picks) data[key].picks[check]='';
   save();
-  const el=document.getElementById('w_'+key+'_'+check.replace(/\s+/g,'_'));
-  if(el) el.classList.toggle('done',val);
+
+  // Re-render just this card's checks area to show/hide dropdown
   const card=document.getElementById('day-'+key);
   if(card){
-    const totalEl=card.querySelector('.cal-total');
-    if(totalEl) totalEl.textContent=dayCal(key);
+    const info=DAY_DATA[key];
+    const checks=getChecks(info.dow);
+    const mkChk=c=>{
+      const cid=key+'_'+c.id.replace(/\s+/g,'_');
+      const checked=data[key].checks[c.id];
+      const chkAttr=checked?'checked':'';
+      const doneClass=checked?' done':'';
+      const isMealSlot=MEAL_SLOTS.includes(c.id);
+      const isDrinkSlot=c.id===DRINK_SLOT;
+      let selectHTML='';
+      if(checked && isMealSlot){
+        const opts=MEAL_FLAVORS.map(f=>`<option value="${f}"${data[key].picks[c.id]===f?' selected':''}>${f}</option>`).join('');
+        selectHTML=`<select class="meal-select" onchange="pickMeal('${key}','${c.id}',this.value)"><option value="">-- pick --</option>${opts}</select>`;
+      }
+      if(checked && isDrinkSlot){
+        const opts=DRINK_FLAVORS.map(f=>`<option value="${f}"${data[key].picks[c.id]===f?' selected':''}>${f}</option>`).join('');
+        selectHTML=`<select class="meal-select" onchange="pickMeal('${key}','${c.id}',this.value)"><option value="">-- pick --</option>${opts}</select>`;
+      }
+      return `<div class="chk ${c.type}${doneClass}" id="w_${cid}"><input type="checkbox" id="${cid}" ${chkAttr} onchange="toggle('${key}','${c.id.replace(/'/g,"\\'")}',this.checked)"><label for="${cid}">${c.id}</label>${selectHTML}</div>`;
+    };
+    const posRow=checks.filter(c=>c.type==='pos').map(mkChk).join('');
+    const negRow=checks.filter(c=>c.type==='fast'||c.type==='neg').map(mkChk).join('');
+    const checksEl=card.querySelector('.checks');
+    if(checksEl) checksEl.innerHTML=`${posRow?`<div class="check-row">${posRow}</div>`:''}<div class="check-row">${negRow}</div>`;
+
+    const picks=data[key].picks||{};
+    const pickTags=Object.entries(picks).filter(([slot,v])=>v&&data[key].checks[slot]).map(([slot,v])=>`<span class="pick-tag">${slot.replace('Huel ','')}: ${v}</span>`).join('');
+    let picksEl=card.querySelector('.meal-picks');
+    if(pickTags){
+      if(!picksEl){picksEl=document.createElement('div');picksEl.className='meal-picks';card.querySelector('.day-left').appendChild(picksEl);}
+      picksEl.innerHTML=pickTags;
+    }else if(picksEl){picksEl.remove();}
+
+    const t=card.querySelector('.cal-total');if(t)t.textContent=dayCal(key);
   }
-  updateSummary();
+  updateSummary();renderInventory();
 }
 
+// ── Summary ──
 function updateSummary(){
   const entries=DAY_KEYS.map(k=>({key:k,w:parseFloat(data[k]?.weight)})).filter(e=>!isNaN(e.w));
   const el=document.getElementById('summary');
-
   const calDays=[];
-  DAY_KEYS.forEach(k=>{
-    const c=dayCal(k);
-    if(c>0) calDays.push(c);
-  });
+  DAY_KEYS.forEach(k=>{const c=dayCal(k);if(c>0) calDays.push(c);});
   const totalCal=calDays.reduce((a,b)=>a+b,0);
   const avgCal=calDays.length?Math.round(totalCal/calDays.length):0;
   const lowCal=calDays.length?Math.min(...calDays):0;
   const highCal=calDays.length?Math.max(...calDays):0;
 
   if(entries.length===0 && calDays.length===0){
-    el.innerHTML='<div class="summary-row"><div class="stat">Enter your first weight to see stats</div></div>';
-    return;
+    el.innerHTML='<div class="summary-row"><div class="stat">Enter your first weight to see stats</div></div>';return;
   }
-
   let weightHTML='';
   if(entries.length>0){
-    const first=entries[0].w;
-    const last=entries[entries.length-1].w;
-    const diff=last-first;
+    const first=entries[0].w,last=entries[entries.length-1].w,diff=last-first;
     const sign=diff>0?'+':'';
-    const fi=DAY_KEYS.indexOf(entries[0].key);
-    const li=DAY_KEYS.indexOf(entries[entries.length-1].key);
+    const fi=DAY_KEYS.indexOf(entries[0].key),li=DAY_KEYS.indexOf(entries[entries.length-1].key);
     const daySpan=Math.max(1,li-fi);
-    const avgPerDay=(diff/daySpan).toFixed(2);
-    const avgSign=avgPerDay>0?'+':'';
-    const low=Math.min(...entries.map(e=>e.w));
-    const high=Math.max(...entries.map(e=>e.w));
+    const avgPerDay=(diff/daySpan).toFixed(2);const avgSign=avgPerDay>0?'+':'';
+    const low=Math.min(...entries.map(e=>e.w)),high=Math.max(...entries.map(e=>e.w));
     weightHTML=`<div class="summary-row">`+
       `<div class="stat">Start: <strong>${first} kg</strong></div>`+
       `<div class="stat">Current: <strong>${last} kg</strong></div>`+
@@ -378,10 +440,8 @@ function updateSummary(){
       `<div class="stat">Entries: <strong>${entries.length}</strong></div>`+
       `<div class="stat">Days: <strong>${daySpan}</strong></div>`+
       `<div class="stat">Low: <strong>${low} kg</strong></div>`+
-      `<div class="stat">High: <strong>${high} kg</strong></div>`+
-      `</div>`;
+      `<div class="stat">High: <strong>${high} kg</strong></div></div>`;
   }
-
   let calHTML='';
   if(calDays.length>0){
     calHTML=`<div class="summary-row">`+
@@ -389,50 +449,31 @@ function updateSummary(){
       `<div class="stat">Avg/day: <strong class="cal">${avgCal} kcal</strong></div>`+
       `<div class="stat">Low Day: <strong class="cal">${lowCal} kcal</strong></div>`+
       `<div class="stat">High Day: <strong class="cal">${highCal} kcal</strong></div>`+
-      `<div class="stat">Days w/ food: <strong class="cal">${calDays.length}</strong></div>`+
-      `</div>`;
+      `<div class="stat">Days w/ food: <strong class="cal">${calDays.length}</strong></div></div>`;
   }
-
   el.innerHTML=weightHTML+calHTML;
 }
 
+// ── Export ──
 function exportWeightsCSV(){
   let csv='Date,Day,Weight (kg)\n';
-  DAY_KEYS.forEach(k=>{
-    const info=DAY_DATA[k];
-    const w=data[k]?.weight||'';
-    csv+=`${k},${fmtDisplay(info.dow,info.date)},${w}\n`;
-  });
+  DAY_KEYS.forEach(k=>{const info=DAY_DATA[k];csv+=`${k},${fmtDisplay(info.dow,info.date)},${data[k]?.weight||''}\n`;});
   dl(csv,'huel-weights.csv','text/csv');
 }
-
 function exportAllCSV(){
   const allChecks=[...new Set(DAY_KEYS.flatMap(k=>getChecks(DAY_DATA[k].dow).map(c=>c.id)))];
-  let csv='#,Date,Day,Weight (kg),Huel Cal,Extra Cal,Total Cal,'+allChecks.join(',')+'\n';
+  let csv='#,Date,Day,Weight (kg),Huel Cal,Extra Cal,Total Cal,'+allChecks.join(',')+',Meal Picks\n';
   DAY_KEYS.forEach((k,i)=>{
-    const info=DAY_DATA[k];
-    const row=data[k]||{weight:'',checks:{},extraCal:''};
+    const info=DAY_DATA[k];const row=data[k]||{weight:'',checks:{},extraCal:'',picks:{}};
     const dayChecks=getChecks(info.dow).map(x=>x.id);
-    const totalCal=dayCal(k);
-    const extra=parseInt(row.extraCal)||0;
-    const huelCal=totalCal-extra;
-    const vals=allChecks.map(c=>{
-      if(!dayChecks.includes(c)) return 'N/A';
-      return row.checks[c]?'YES':'NO';
-    });
-    csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${huelCal},${extra},${totalCal},${vals.join(',')}\n`;
+    const totalCal=dayCal(k);const extra=parseInt(row.extraCal)||0;const huelCal=totalCal-extra;
+    const vals=allChecks.map(c=>{if(!dayChecks.includes(c)) return 'N/A';return row.checks[c]?'YES':'NO';});
+    const picks=Object.entries(row.picks||{}).filter(([s,v])=>v&&row.checks[s]).map(([s,v])=>s.replace('Huel ','')+':'+v).join('; ');
+    csv+=`${i+1},${k},${fmtDisplay(info.dow,info.date)},${row.weight||''},${huelCal},${extra},${totalCal},${vals.join(',')},${picks}\n`;
   });
   dl(csv,'huel-journey-full.csv','text/csv');
 }
-
-function dl(content,name,type){
-  const blob=new Blob([content],{type});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download=name;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
+function dl(content,name,type){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 
 init();
 </script>
