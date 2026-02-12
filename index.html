@@ -19,6 +19,10 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar button:hover{background:#30363d}
 .inv-panel{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:16px}
 .inv-toggle{background:none;border:none;color:#58a6ff;cursor:pointer;font-size:.9rem;font-weight:600;width:100%;text-align:left;padding:0}
+.inv-stats{font-size:.75rem;color:#8b949e;margin-top:4px}
+.inv-stats span{margin-right:12px}
+.inv-stats strong{color:#3fb950}
+.inv-stats .used{color:#484f58}
 .inv-body{margin-top:10px;display:none}
 .inv-body.open{display:block}
 .inv-section-title{font-size:.8rem;color:#8b949e;margin-bottom:6px;border-bottom:1px solid #21262d;padding-bottom:3px}
@@ -114,6 +118,7 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 
 <div class="inv-panel">
   <button class="inv-toggle" onclick="toggleInv()">Meal Inventory ▸</button>
+  <div class="inv-stats" id="inv-stats"></div>
   <div class="inv-body" id="inv-body"></div>
 </div>
 
@@ -129,10 +134,9 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 <div class="meal-modal-overlay" id="meal-modal">
   <div class="meal-modal">
     <h3 id="meal-modal-title">Choose Meal Flavor</h3>
-    <select id="meal-modal-select"></select>
+    <select id="meal-modal-select" onchange="if(this.value)mealModalConfirm()"></select>
     <div class="meal-modal-btns">
       <button class="btn-cancel" onclick="mealModalCancel()">Cancel</button>
-      <button class="btn-confirm" onclick="mealModalConfirm()">Confirm</button>
     </div>
   </div>
 </div>
@@ -221,6 +225,9 @@ function renderInventory(){
   const flavors=getMealFlavors();
   const items=flavors.map(f=>({name:f,total:invStock[f],used:consumed[f]||0,left:invStock[f]-(consumed[f]||0)})).sort((a,b)=>b.left-a.left);
   const totalLeft=items.reduce((a,b)=>a+Math.max(0,b.left),0);
+  const totalAll=items.reduce((a,b)=>a+b.total,0);
+  const totalUsed=items.reduce((a,b)=>a+b.used,0);
+  document.getElementById('inv-stats').innerHTML=`<span>Total: <strong>${totalAll}</strong> meals</span><span class="used">Used: ${totalUsed}</span><span>Left: <strong>${totalLeft}</strong></span>`;
 
   const mkItem=it=>{
     const dep=it.left<=0?' depleted':'';
@@ -274,7 +281,7 @@ function showMealModal(key,slot){
 }
 function mealModalConfirm(){
   const sel=document.getElementById('meal-modal-select');
-  if(!sel.value){sel.style.borderColor='#da3633';return;}
+  if(!sel.value) return;
   const{key,slot}=pendingMeal;
   data[key].checks[slot]=true;
   if(!data[key].picks) data[key].picks={};
