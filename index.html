@@ -18,9 +18,9 @@ h1{font-size:1.4rem;color:#58a6ff;text-align:center;margin-bottom:4px}
 .toolbar button{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:.8rem}
 .toolbar button:hover{background:#30363d}
 .inv-panel{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:14px;margin-bottom:16px}
-.inv-header{display:flex;align-items:center;cursor:pointer;gap:10px}
-.inv-title{color:#58a6ff;font-size:.9rem;font-weight:600;white-space:nowrap}
-.inv-stats{flex:1;text-align:center;font-size:.85rem;color:#8b949e;display:flex;justify-content:center;gap:14px}
+.inv-header{position:relative;display:flex;align-items:center;cursor:pointer}
+.inv-title{color:#58a6ff;font-size:.9rem;font-weight:600;white-space:nowrap;position:relative;z-index:1}
+.inv-stats{position:absolute;left:0;right:0;text-align:center;font-size:.85rem;color:#8b949e;display:flex;justify-content:center;gap:14px}
 .inv-stats .st-total{color:#8b949e;font-weight:600}
 .inv-stats .st-used{color:#484f58;font-size:.75rem}
 .inv-stats .st-left{color:#3fb950;font-weight:600}
